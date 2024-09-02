@@ -48,3 +48,67 @@ impl From<SendError<Transaction>> for EngineError {
         EngineError::SendError(err)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::TransactionType;
+    use std::io;
+    use tokio::sync::mpsc;
+
+    #[test]
+    fn test_io_error_display() {
+        let io_err = io::Error::new(io::ErrorKind::Other, "some io error");
+        let engine_error = EngineError::from(io_err);
+        assert_eq!(format!("{}", engine_error), "I/O Error: some io error");
+    }
+
+    #[test]
+    fn test_transaction_error_display() {
+        let engine_error = EngineError::TransactionError("invalid transaction".into());
+        assert_eq!(
+            format!("{}", engine_error),
+            "Transaction Error: invalid transaction"
+        );
+    }
+
+    #[test]
+    fn test_transaction_not_found_display() {
+        let engine_error = EngineError::TransactionNotFound(42);
+        assert_eq!(format!("{}", engine_error), "Transaction not found: 42");
+    }
+
+    #[test]
+    fn test_invalid_operation_display() {
+        let engine_error = EngineError::InvalidOperation("invalid operation".into());
+        assert_eq!(
+            format!("{}", engine_error),
+            "Invalid Operation: invalid operation"
+        );
+    }
+
+    #[test]
+    fn test_send_error_display() {
+        let (_tx, _rx) = mpsc::channel::<Transaction>(1);
+        let transaction = Transaction {
+            tx_type: TransactionType::Deposit,
+            client: 0,
+            tx_id: 0,
+            amount: None,
+            under_dispute: false,
+        };
+
+        let send_error: Result<(), SendError<Transaction>> = Err(SendError(transaction));
+        let engine_error = EngineError::from(send_error.err().unwrap());
+        assert!(format!("{}", engine_error).contains("Send Error"));
+    }
+
+    #[test]
+    fn test_shutdown_error_display() {
+        let engine_error = EngineError::ShutDownError("shutdown failed".into());
+        assert_eq!(
+            format!("{}", engine_error),
+            "ShutDown Error: shutdown failed"
+        );
+    }
+}

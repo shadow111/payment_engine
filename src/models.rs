@@ -2,7 +2,7 @@ use crate::errors::EngineError;
 use serde::Deserialize;
 
 /// Enum representing the types of transactions
-#[derive(Debug, Copy, Clone, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TransactionType {
     Deposit,
@@ -92,5 +92,115 @@ impl ClientAccount {
                 "Attempted to process a chargeback on an already locked account.".into(),
             ))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_transaction_deserialization() {
+        let csv_data = "type,client,tx,amount\n\
+                        deposit,1,1,1000.0\n";
+        let mut rdr = csv::ReaderBuilder::new().from_reader(csv_data.as_bytes());
+        let transaction: Transaction = rdr
+            .deserialize()
+            .next()
+            .expect("Failed to deserialize transaction")
+            .expect("Invalid CSV data");
+
+        assert_eq!(transaction.tx_type, TransactionType::Deposit);
+        assert_eq!(transaction.client, 1);
+        assert_eq!(transaction.tx_id, 1);
+        assert_eq!(transaction.amount, Some(1000.0));
+        assert_eq!(transaction.under_dispute, false);
+    }
+
+    #[test]
+    fn test_deposit() {
+        let mut account = ClientAccount::new();
+        account.deposit(1000.0);
+
+        assert_eq!(account.available, 1000.0);
+        assert_eq!(account.total, 1000.0);
+        assert_eq!(account.held, 0.0);
+        assert_eq!(account.locked, false);
+    }
+
+    #[test]
+    fn test_withdraw_sufficient_funds() {
+        let mut account = ClientAccount::new();
+        account.deposit(1000.0);
+        let result = account.withdraw(500.0);
+
+        assert!(result.is_ok());
+        assert_eq!(account.available, 500.0);
+        assert_eq!(account.total, 500.0);
+        assert_eq!(account.held, 0.0);
+    }
+
+    #[test]
+    fn test_withdraw_insufficient_funds() {
+        let mut account = ClientAccount::new();
+        account.deposit(500.0);
+        let result = account.withdraw(1000.0);
+
+        assert!(result.is_err());
+        assert_eq!(account.available, 500.0);
+        assert_eq!(account.total, 500.0);
+        assert_eq!(account.held, 0.0);
+    }
+
+    #[test]
+    fn test_dispute() {
+        let mut account = ClientAccount::new();
+        account.deposit(1000.0);
+        account.dispute(500.0);
+
+        assert_eq!(account.available, 500.0);
+        assert_eq!(account.held, 500.0);
+        assert_eq!(account.total, 1000.0);
+    }
+
+    #[test]
+    fn test_resolve_dispute() {
+        let mut account = ClientAccount::new();
+        account.deposit(1000.0);
+        account.dispute(500.0);
+        account.resolve(500.0);
+
+        assert_eq!(account.available, 1000.0);
+        assert_eq!(account.held, 0.0);
+        assert_eq!(account.total, 1000.0);
+    }
+
+    #[test]
+    fn test_chargeback() {
+        let mut account = ClientAccount::new();
+        account.deposit(1000.0);
+        account.dispute(500.0);
+        let result = account.chargeback(500.0);
+
+        assert!(result.is_ok());
+        assert_eq!(account.available, 500.0);
+        assert_eq!(account.held, 0.0);
+        assert_eq!(account.total, 500.0);
+        assert_eq!(account.locked, true);
+    }
+
+    #[test]
+    fn test_chargeback_on_locked_account() {
+        let mut account = ClientAccount::new();
+        account.deposit(1000.0);
+        account.dispute(500.0);
+        account.chargeback(500.0).expect("First chargeback failed");
+        let result = account.chargeback(500.0);
+
+        assert!(result.is_err());
+        assert_eq!(account.available, 500.0);
+        assert_eq!(account.held, 0.0);
+        assert_eq!(account.total, 500.0);
+        assert_eq!(account.locked, true);
     }
 }
