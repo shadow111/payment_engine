@@ -1,6 +1,8 @@
 use crate::errors::EngineError;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Deserializer};
+use std::fmt;
+use std::str::FromStr;
 
 const MAX_DISPLAY_PRECISION: u32 = 4;
 
@@ -9,10 +11,28 @@ fn deserialize_decimal_with_precision<'de, D>(deserializer: D) -> Result<Option<
 where
     D: Deserializer<'de>,
 {
-    let opt_decimal = Option::<Decimal>::deserialize(deserializer)?;
+    let opt_str = Option::<String>::deserialize(deserializer)?;
+
+    let opt_decimal = opt_str
+        .map(|s| s.trim().parse::<Decimal>())
+        .transpose()
+        .map_err(serde::de::Error::custom)?;
+
     let rounded_decimal =
         opt_decimal.map(|decimal| decimal.trunc_with_scale(MAX_DISPLAY_PRECISION));
     Ok(rounded_decimal)
+}
+
+/// Custom deserialization function to trim whitespaces
+fn deserialize_trimmed<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: FromStr,
+    T::Err: fmt::Display,
+{
+    let s: String = Deserialize::deserialize(deserializer)?;
+    let trimmed = s.trim();
+    trimmed.parse().map_err(serde::de::Error::custom)
 }
 
 /// Enum representing the types of transactions
@@ -26,13 +46,45 @@ pub enum TransactionType {
     Chargeback,
 }
 
+impl FromStr for TransactionType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "deposit" => Ok(TransactionType::Deposit),
+            "withdrawal" => Ok(TransactionType::Withdrawal),
+            "dispute" => Ok(TransactionType::Dispute),
+            "resolve" => Ok(TransactionType::Resolve),
+            "chargeback" => Ok(TransactionType::Chargeback),
+            _ => Err(format!("Invalid transaction type: {}", s)),
+        }
+    }
+}
+
+impl fmt::Display for TransactionType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match *self {
+                TransactionType::Deposit => "deposit",
+                TransactionType::Withdrawal => "withdrawal",
+                TransactionType::Dispute => "transfer",
+                TransactionType::Resolve => "resolve",
+                TransactionType::Chargeback => "chargeback",
+            }
+        )
+    }
+}
+
 /// Struct representing a single transaction
 #[derive(Debug, Copy, Clone, Deserialize)]
 pub struct Transaction {
-    #[serde(rename = "type")]
+    #[serde(rename = "type", deserialize_with = "deserialize_trimmed")]
     pub tx_type: TransactionType,
+    #[serde(deserialize_with = "deserialize_trimmed")]
     pub client: u16,
-    #[serde(rename = "tx")]
+    #[serde(rename = "tx", deserialize_with = "deserialize_trimmed")]
     pub tx_id: u32,
     #[serde(deserialize_with = "deserialize_decimal_with_precision")]
     pub amount: Option<Decimal>,
@@ -41,7 +93,7 @@ pub struct Transaction {
 }
 
 /// Struct representing a client's account
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ClientAccount {
     pub available: Decimal,
     pub held: Decimal,
@@ -52,9 +104,9 @@ pub struct ClientAccount {
 impl ClientAccount {
     pub fn new() -> Self {
         ClientAccount {
-            available: Decimal::new(0, 4),
-            held: Decimal::new(0, 4),
-            total: Decimal::new(0, 4),
+            available: Decimal::new(0, MAX_DISPLAY_PRECISION),
+            held: Decimal::new(0, MAX_DISPLAY_PRECISION),
+            total: Decimal::new(0, MAX_DISPLAY_PRECISION),
             locked: false,
         }
     }
@@ -73,6 +125,7 @@ impl ClientAccount {
         if !self.locked && self.available >= amount {
             self.available -= amount;
             self.total -= amount;
+
             Ok(())
         } else {
             Err(EngineError::TransactionError("Insufficient funds".into()))
@@ -118,7 +171,7 @@ mod tests {
     #[test]
     fn test_transaction_deserialization() {
         let csv_data = "type,client,tx,amount\n\
-                        deposit,1,1,1000.0\n";
+                        deposit,    1,1,1000.0\n";
         let mut rdr = csv::ReaderBuilder::new().from_reader(csv_data.as_bytes());
         let transaction: Transaction = rdr
             .deserialize()
