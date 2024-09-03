@@ -195,9 +195,9 @@ impl ShardedEngine {
             for (client_id, account) in shard_state.accounts.iter() {
                 wtr.serialize((
                     client_id,
-                    format!("{:.4}", account.available),
-                    format!("{:.4}", account.held),
-                    format!("{:.4}", account.total),
+                    account.available,
+                    account.held,
+                    account.total,
                     account.locked,
                 ))?;
             }
@@ -210,6 +210,7 @@ impl ShardedEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rust_decimal_macros::dec;
     use std::collections::HashMap;
 
     #[tokio::test]
@@ -223,20 +224,20 @@ mod tests {
             tx_type: TransactionType::Deposit,
             client: 1,
             tx_id: 1,
-            amount: Some(1000.0),
+            amount: Some(dec!(1000.0)),
             under_dispute: false,
         };
 
         ShardedEngine::process_transaction_in_shard(&mut shard_state, transaction).unwrap();
 
         let account = shard_state.accounts.get(&1).unwrap();
-        assert_eq!(account.available, 1000.0);
-        assert_eq!(account.total, 1000.0);
-        assert_eq!(account.held, 0.0);
+        assert_eq!(account.available, dec!(1000.0));
+        assert_eq!(account.total, dec!(1000.0));
+        assert_eq!(account.held, dec!(0.0));
 
         let tx = shard_state.transactions.get(&1).unwrap();
         assert_eq!(tx.tx_type, TransactionType::Deposit);
-        assert_eq!(tx.amount, Some(1000.0));
+        assert_eq!(tx.amount, Some(dec!(1000.0)));
     }
 
     #[tokio::test]
@@ -250,7 +251,7 @@ mod tests {
             tx_type: TransactionType::Deposit,
             client: 1,
             tx_id: 1,
-            amount: Some(1000.0),
+            amount: Some(dec!(1000.0)),
             under_dispute: false,
         };
 
@@ -260,20 +261,20 @@ mod tests {
             tx_type: TransactionType::Withdrawal,
             client: 1,
             tx_id: 2,
-            amount: Some(500.0),
+            amount: Some(dec!(500.0)),
             under_dispute: false,
         };
 
         ShardedEngine::process_transaction_in_shard(&mut shard_state, withdrawal).unwrap();
 
         let account = shard_state.accounts.get(&1).unwrap();
-        assert_eq!(account.available, 500.0);
-        assert_eq!(account.total, 500.0);
-        assert_eq!(account.held, 0.0);
+        assert_eq!(account.available, dec!(500.0));
+        assert_eq!(account.total, dec!(500.0));
+        assert_eq!(account.held, dec!(0.0));
 
         let tx = shard_state.transactions.get(&2).unwrap();
         assert_eq!(tx.tx_type, TransactionType::Withdrawal);
-        assert_eq!(tx.amount, Some(500.0));
+        assert_eq!(tx.amount, Some(dec!(500.0)));
     }
 
     #[tokio::test]
@@ -287,7 +288,7 @@ mod tests {
             tx_type: TransactionType::Deposit,
             client: 1,
             tx_id: 1,
-            amount: Some(1000.0),
+            amount: Some(dec!(1000.0)),
             under_dispute: false,
         };
 
@@ -304,9 +305,9 @@ mod tests {
         ShardedEngine::process_transaction_in_shard(&mut shard_state, dispute).unwrap();
 
         let account = shard_state.accounts.get(&1).unwrap();
-        assert_eq!(account.available, 0.0);
-        assert_eq!(account.held, 1000.0);
-        assert_eq!(account.total, 1000.0);
+        assert_eq!(account.available, dec!(0.0));
+        assert_eq!(account.held, dec!(1000.0));
+        assert_eq!(account.total, dec!(1000.0));
 
         let tx = shard_state.transactions.get(&1).unwrap();
         assert!(tx.under_dispute);
@@ -323,7 +324,7 @@ mod tests {
             tx_type: TransactionType::Deposit,
             client: 1,
             tx_id: 1,
-            amount: Some(1000.0),
+            amount: Some(dec!(1000.0)),
             under_dispute: false,
         };
 
@@ -350,9 +351,9 @@ mod tests {
         ShardedEngine::process_transaction_in_shard(&mut shard_state, resolve).unwrap();
 
         let account = shard_state.accounts.get(&1).unwrap();
-        assert_eq!(account.available, 1000.0);
-        assert_eq!(account.held, 0.0);
-        assert_eq!(account.total, 1000.0);
+        assert_eq!(account.available, dec!(1000.0));
+        assert_eq!(account.held, dec!(0.0));
+        assert_eq!(account.total, dec!(1000.0));
 
         let tx = shard_state.transactions.get(&1).unwrap();
         assert!(tx.under_dispute);
@@ -369,7 +370,7 @@ mod tests {
             tx_type: TransactionType::Deposit,
             client: 1,
             tx_id: 1,
-            amount: Some(1000.0),
+            amount: Some(dec!(1000.0)),
             under_dispute: false,
         };
 
@@ -396,9 +397,9 @@ mod tests {
         ShardedEngine::process_transaction_in_shard(&mut shard_state, chargeback).unwrap();
 
         let account = shard_state.accounts.get(&1).unwrap();
-        assert_eq!(account.available, 0.0);
-        assert_eq!(account.held, 0.0);
-        assert_eq!(account.total, 0.0);
+        assert_eq!(account.available, dec!(0.0));
+        assert_eq!(account.held, dec!(0.0));
+        assert_eq!(account.total, dec!(0.0));
         assert!(account.locked);
 
         let tx = shard_state.transactions.get(&1).unwrap();
@@ -416,7 +417,7 @@ mod tests {
             tx_type: TransactionType::Deposit,
             client: 1,
             tx_id: 1,
-            amount: Some(500.0),
+            amount: Some(dec!(500.0)),
             under_dispute: false,
         };
 
@@ -426,7 +427,7 @@ mod tests {
             tx_type: TransactionType::Withdrawal,
             client: 1,
             tx_id: 2,
-            amount: Some(1000.0),
+            amount: Some(dec!(1000.0)),
             under_dispute: false,
         };
 
@@ -434,9 +435,9 @@ mod tests {
         assert!(result.is_err());
 
         let account = shard_state.accounts.get(&1).unwrap();
-        assert_eq!(account.available, 500.0);
-        assert_eq!(account.total, 500.0);
-        assert_eq!(account.held, 0.0);
+        assert_eq!(account.available, dec!(500.0));
+        assert_eq!(account.total, dec!(500.0));
+        assert_eq!(account.held, dec!(0.0));
 
         let tx = shard_state.transactions.get(&2);
         assert!(tx.is_none());
@@ -458,7 +459,7 @@ mod tests {
                 },
                 client: i % 10,
                 tx_id: i as u32,
-                amount: Some(1000.0),
+                amount: Some(dec!(1000.0)),
                 under_dispute: false,
             };
 
@@ -480,7 +481,7 @@ mod tests {
             let shard_state = shard.lock().await;
             for account in shard_state.accounts.values() {
                 // Ensure the account is consistent.
-                assert!(account.available >= 0.0);
+                assert!(account.available >= dec!(0.0));
                 assert!(account.total >= account.available);
             }
         }
