@@ -7,7 +7,7 @@
 This repository implements a Sharded Payments Engine in Rust, designed to handle financial transactions efficiently using a sharded architecture. The engine is capable of processing deposits, withdrawals, disputes, resolves, and chargebacks for multiple clients concurrently, with a focus on efficient resource usage and concurrency.
 
 ## Assumptions
-
+- **Transaction Type**: I did not check if  Transaction Type is valid or not, I assume the transaction will always contain a valid transaction type.
 - **Negative Balance**: Clients Can Have a Negative Balance. In this system, clients can have a negative balance under certain conditions, such as when a chargeback occurs on a transaction that has already been disputed.
 - **Locked Accounts**: Locked Accounts Cannot Perform Any Transactions. When an account is locked, the client is unable to perform any transactions, including deposits, withdrawals, disputes, resolves, and chargebacks.
 
