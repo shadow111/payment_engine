@@ -12,4 +12,5 @@ deposit,3,6,500.0
 withdrawal,3,7,100.0
 dispute,3,6,
 resolve,3,6,
+resolve,3,6,
 deposit     ,2,10,           200.0

@@ -7,10 +7,10 @@
 This repository implements a Sharded Payments Engine in Rust, designed to handle financial transactions efficiently using a sharded architecture. The engine is capable of processing deposits, withdrawals, disputes, resolves, and chargebacks for multiple clients concurrently, with a focus on efficient resource usage and concurrency.
 
 ## Assumptions
-- **Amount**: 4 Decimal points, i assumed truncate not rounded decimal
+- **Amount**: 4 Decimal points, I assumed truncate not rounded decimal.
 - **Negative Balance**: Clients Can Have a Negative Balance. In this system, clients can have a negative balance under certain conditions, such as when a chargeback occurs on a transaction that has already been disputed.
 - **Locked Accounts**: Locked Accounts Cannot Perform Any Transactions. When an account is locked, the client is unable to perform any transactions, including deposits, withdrawals, disputes, resolves, and chargebacks.
-
+- **Transaction Order Handling**: The current implementation processes transactions in the order they are received. However, it does not account for the logical order required by some transaction types. For example, a Resolve transaction that is received before a Dispute transaction will be ignored because the transaction is not under dispute yet
 ## Technologies Used
 
 - **Rust**: The core programming language used for implementing the engine, chosen for its performance, memory safety, and concurrency support.
@@ -32,20 +32,23 @@ The engine is designed with a sharded architecture, where client accounts and th
     - Each shard is associated with a `ClientShard`, which is a thread-safe structure protected by a `Mutex`. The shards are stored in a vector.
 
 2. **Transaction Streaming**:
-    - Transactions are streamed directly from a CSV file, which means that transactions are read and processed in real-time without loading the entire file into memory. This approach optimizes memory usage, especially when dealing with large datasets.
+    - Transactions are streamed and validated directly from a CSV file, which means that transactions are read and processed in real-time without loading the entire file into memory. This approach optimizes memory usage, especially when dealing with large datasets.
 
 3. **Transaction Routing**:
     - Incoming transactions are routed to a shard based on the client's ID, ensuring that all transactions for a particular client are handled by the same shard.
     - The engine uses **channels** provided by the `tokio::sync::mpsc` module to send transactions to the appropriate shard asynchronously. Each shard has its own transaction channel, allowing it to process transactions concurrently.
+   
+4. **Duplicate Transaction Detection**: 
+   - The engine includes a mechanism to detect and handle duplicate transactions. If a transaction with the same ID is encountered more than once, the engine will skip the duplicate and only process the transaction the first time it is received. This ensures the integrity of transaction processing by preventing double processing.
 
-4. **Transaction Processing**:
+5. **Transaction Processing**:
     - Each shard processes transactions asynchronously. The engine handles deposits, withdrawals, disputes, resolves, and chargebacks, updating the client account states accordingly.
     - If the engine is in the process of shutting down, new transactions are rejected to ensure consistency.
 
-5. **Shutdown and Completion**:
+6. **Shutdown and Completion**:
     - The engine currently supports a basic shutdown mechanism. However, the full graceful shutdown—where all ongoing transactions are processed before the engine shuts down—is not yet implemented.
 
-6. **State Output**:
+7. **State Output**:
     - The final state of all client accounts is output to a CSV file, which includes the client's available balance, held balance, total balance, and locked status.
 
 ### Error Handling
@@ -103,6 +106,7 @@ Where `<input_file>` is the path to the CSV file containing the transactions, an
 
 ## Future Improvements
 
+- **Pending Queue**: To address the issue of out-of-order transactions, a pending queue can be introduced. This queue would temporarily hold transactions that cannot be processed immediately due to the required preceding transaction not being present (e.g., a Resolve transaction waiting for its corresponding Dispute to arrive). When a new transaction is received, the engine would check the pending queue and attempt to process any transactions that have become valid due to the new input.
 - **Graceful Shutdown**: Fully implement a graceful shutdown process that ensures all in-flight transactions are processed before the engine shuts down.
 - **Persistence**: Add persistence mechanisms to save the state of accounts and transactions in case of a system crash.
 - **Optimizations**: Investigate further optimizations for handling large volumes of transactions efficiently.

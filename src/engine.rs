@@ -1,6 +1,6 @@
 use crate::errors::EngineError;
 use crate::models::{ClientAccount, Transaction, TransactionType};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex, Notify};
@@ -21,6 +21,7 @@ pub struct ShardedEngine {
 pub struct ShardState {
     accounts: HashMap<u16, ClientAccount>,
     transactions: HashMap<u32, Transaction>,
+    processed_transactions: HashSet<Transaction>,
 }
 
 impl ShardedEngine {
@@ -36,6 +37,7 @@ impl ShardedEngine {
             let shard: ClientShard = Arc::new(Mutex::new(ShardState {
                 accounts: HashMap::new(),
                 transactions: HashMap::new(),
+                processed_transactions: HashSet::new(),
             }));
 
             let shard_clone: ClientShard = Arc::clone(&shard);
@@ -105,6 +107,14 @@ impl ShardedEngine {
             .accounts
             .entry(transaction.client)
             .or_insert_with(ClientAccount::new);
+
+        if shard_state.processed_transactions.contains(&transaction) {
+            return Err(EngineError::TransactionError(
+                "Duplicate transaction".into(),
+            ));
+        } else {
+            shard_state.processed_transactions.insert(transaction);
+        }
 
         match transaction.tx_type {
             TransactionType::Deposit => {
@@ -218,6 +228,7 @@ mod tests {
         let mut shard_state = ShardState {
             accounts: HashMap::new(),
             transactions: HashMap::new(),
+            processed_transactions: HashSet::new(),
         };
 
         let transaction = Transaction {
@@ -245,6 +256,7 @@ mod tests {
         let mut shard_state = ShardState {
             accounts: HashMap::new(),
             transactions: HashMap::new(),
+            processed_transactions: HashSet::new(),
         };
 
         let deposit = Transaction {
@@ -282,6 +294,7 @@ mod tests {
         let mut shard_state = ShardState {
             accounts: HashMap::new(),
             transactions: HashMap::new(),
+            processed_transactions: HashSet::new(),
         };
 
         let deposit = Transaction {
@@ -318,6 +331,7 @@ mod tests {
         let mut shard_state = ShardState {
             accounts: HashMap::new(),
             transactions: HashMap::new(),
+            processed_transactions: HashSet::new(),
         };
 
         let deposit = Transaction {
@@ -364,6 +378,7 @@ mod tests {
         let mut shard_state = ShardState {
             accounts: HashMap::new(),
             transactions: HashMap::new(),
+            processed_transactions: HashSet::new(),
         };
 
         let deposit = Transaction {
@@ -411,6 +426,7 @@ mod tests {
         let mut shard_state = ShardState {
             accounts: HashMap::new(),
             transactions: HashMap::new(),
+            processed_transactions: HashSet::new(),
         };
 
         let deposit = Transaction {
@@ -485,5 +501,41 @@ mod tests {
                 assert!(account.total >= account.available);
             }
         }
+    }
+
+    #[tokio::test]
+    async fn test_duplicate_transaction() {
+        let mut shard_state = ShardState {
+            accounts: HashMap::new(),
+            transactions: HashMap::new(),
+            processed_transactions: HashSet::new(),
+        };
+
+        // Create a deposit transaction
+        let deposit = Transaction {
+            tx_type: TransactionType::Deposit,
+            client: 1,
+            tx_id: 1,
+            amount: Some(dec!(1000.0)),
+            under_dispute: false,
+        };
+
+        // Process the transaction once
+        let result = ShardedEngine::process_transaction_in_shard(&mut shard_state, deposit.clone());
+        assert!(result.is_ok());
+
+        // Attempt to process the same transaction again
+        let duplicate_result =
+            ShardedEngine::process_transaction_in_shard(&mut shard_state, deposit);
+        assert!(duplicate_result.is_err());
+
+        // Ensure the account was only updated once
+        let account = shard_state.accounts.get(&1).unwrap();
+        assert_eq!(account.available, dec!(1000.0));
+        assert_eq!(account.total, dec!(1000.0));
+        assert_eq!(account.held, dec!(0.0));
+
+        // Ensure that only one transaction is recorded
+        assert_eq!(shard_state.transactions.len(), 1);
     }
 }

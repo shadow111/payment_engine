@@ -6,7 +6,7 @@ use std::str::FromStr;
 pub const MAX_DISPLAY_PRECISION: u32 = 4;
 
 /// Enum representing the types of transactions
-#[derive(Debug, Copy, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TransactionType {
     Deposit,
@@ -34,7 +34,7 @@ impl FromStr for TransactionType {
 }
 
 /// Struct representing a single transaction
-#[derive(Debug, Copy, Clone, Deserialize)]
+#[derive(Debug, Copy, Clone, Hash, Deserialize)]
 pub struct Transaction {
     #[serde(rename = "type")]
     pub tx_type: TransactionType,
@@ -45,6 +45,17 @@ pub struct Transaction {
     #[serde(skip_deserializing)]
     pub under_dispute: bool,
 }
+
+impl PartialEq for Transaction {
+    fn eq(&self, other: &Self) -> bool {
+        self.tx_type == other.tx_type
+            && self.client == other.client
+            && self.tx_id == other.tx_id
+            && self.amount == other.amount
+    }
+}
+
+impl Eq for Transaction {}
 
 /// Struct representing a client's account
 #[derive(Debug)]

@@ -23,7 +23,7 @@ pub fn stream_transactions(
 }
 
 fn validate_and_parse_transaction(record: StringRecord) -> Result<Transaction, EngineError> {
-    if record.len() < 4 {
+    if record.len() != 4 {
         return Err(EngineError::TransactionError(
             "Insufficient data in transaction string".into(),
         ));
