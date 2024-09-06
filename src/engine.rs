@@ -53,7 +53,7 @@ impl ShardedEngine {
                     if let Err(e) =
                         Self::process_transaction_in_shard(&mut shard_state, transaction)
                     {
-                        log::error!("Error processing transaction: {:?}", e);
+                        log::error!("{}", e);
                     }
                 }
                 completed_shards_clone.fetch_add(1, Ordering::SeqCst);
@@ -109,7 +109,7 @@ impl ShardedEngine {
         match transaction.tx_type {
             TransactionType::Deposit => {
                 if let Some(amount) = transaction.amount {
-                    account.deposit(amount);
+                    account.deposit(amount)?;
                     shard_state.transactions.insert(
                         transaction.tx_id,
                         Transaction {
@@ -137,7 +137,7 @@ impl ShardedEngine {
                 match shard_state.transactions.get_mut(&transaction.tx_id) {
                     Some(tx) => {
                         if let Some(amount) = tx.amount {
-                            account.dispute(amount);
+                            account.dispute(amount)?;
                             tx.under_dispute = true;
                         }
                     }
@@ -151,7 +151,7 @@ impl ShardedEngine {
                 match shard_state.transactions.get_mut(&transaction.tx_id) {
                     Some(tx) if tx.under_dispute => {
                         if let Some(amount) = tx.amount {
-                            account.resolve(amount);
+                            account.resolve(amount)?;
                         }
                     }
                     Some(_) => {

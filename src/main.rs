@@ -5,6 +5,7 @@ mod models;
 
 use crate::engine::ShardedEngine;
 use crate::errors::EngineError;
+use log::error;
 use std::env;
 use tokio::runtime::Runtime;
 
@@ -13,7 +14,7 @@ fn main() -> Result<(), EngineError> {
         .filter_level(log::LevelFilter::Info)
         .init();
 
-    let runtime = Runtime::new().unwrap();
+    let runtime = Runtime::new()?;
     runtime.block_on(async {
         let args: Vec<String> = env::args().collect();
         if args.len() < 2 {
@@ -27,8 +28,12 @@ fn main() -> Result<(), EngineError> {
 
         // Process each transaction by routing it to the appropriate shard
         for transaction_result in transactions {
-            let transaction = transaction_result?;
-            engine.route_transaction(transaction)?;
+            match transaction_result {
+                Ok(transaction) => engine.route_transaction(transaction)?,
+                Err(err) => {
+                    error!("{}", err)
+                }
+            }
         }
 
         engine.shutdown();
