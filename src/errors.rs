@@ -2,7 +2,6 @@ use crate::models::Transaction;
 use csv::Error as CsvError;
 use std::{fmt, io};
 use tokio::sync::mpsc::error::SendError;
-
 /// Custom error type for the transaction processing engine
 #[derive(Debug)]
 pub enum EngineError {
@@ -18,15 +17,15 @@ pub enum EngineError {
 impl fmt::Display for EngineError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            EngineError::IoError(err) => write!(f, "I/O Error: {}", err),
-            EngineError::CsvError(err) => write!(f, "CSV Error: {}", err),
-            EngineError::TransactionError(err) => write!(f, "Transaction Error: {}", err),
+            EngineError::IoError(err) => write!(f, "IoError: {}", err),
+            EngineError::CsvError(err) => write!(f, "CsvError: {}", err),
+            EngineError::TransactionError(err) => write!(f, "TransactionError: {}", err),
             EngineError::TransactionNotFound(tx_id) => {
-                write!(f, "Transaction not found: {}", tx_id)
+                write!(f, "TransactionNotFound: {}", tx_id)
             }
-            EngineError::InvalidOperation(err) => write!(f, "Invalid Operation: {}", err),
-            EngineError::SendError(err) => write!(f, "Send Error: {}", err),
-            EngineError::ShutDownError(err) => write!(f, "ShutDown Error: {}", err),
+            EngineError::InvalidOperation(err) => write!(f, "InvalidOperation: {}", err),
+            EngineError::SendError(err) => write!(f, "SendError: {}", err),
+            EngineError::ShutDownError(err) => write!(f, "ShutDownError: {}", err),
         }
     }
 }
@@ -60,7 +59,7 @@ mod tests {
     fn test_io_error_display() {
         let io_err = io::Error::new(io::ErrorKind::Other, "some io error");
         let engine_error = EngineError::from(io_err);
-        assert_eq!(format!("{}", engine_error), "I/O Error: some io error");
+        assert_eq!(format!("{}", engine_error), "IoError: some io error");
     }
 
     #[test]
@@ -68,14 +67,14 @@ mod tests {
         let engine_error = EngineError::TransactionError("invalid transaction".into());
         assert_eq!(
             format!("{}", engine_error),
-            "Transaction Error: invalid transaction"
+            "TransactionError: invalid transaction"
         );
     }
 
     #[test]
     fn test_transaction_not_found_display() {
         let engine_error = EngineError::TransactionNotFound(42);
-        assert_eq!(format!("{}", engine_error), "Transaction not found: 42");
+        assert_eq!(format!("{}", engine_error), "TransactionNotFound: 42");
     }
 
     #[test]
@@ -83,7 +82,7 @@ mod tests {
         let engine_error = EngineError::InvalidOperation("invalid operation".into());
         assert_eq!(
             format!("{}", engine_error),
-            "Invalid Operation: invalid operation"
+            "InvalidOperation: invalid operation"
         );
     }
 
@@ -100,7 +99,7 @@ mod tests {
 
         let send_error: Result<(), SendError<Transaction>> = Err(SendError(transaction));
         let engine_error = EngineError::from(send_error.err().unwrap());
-        assert!(format!("{}", engine_error).contains("Send Error"));
+        assert!(format!("{}", engine_error).contains("SendError"));
     }
 
     #[test]
@@ -108,7 +107,7 @@ mod tests {
         let engine_error = EngineError::ShutDownError("shutdown failed".into());
         assert_eq!(
             format!("{}", engine_error),
-            "ShutDown Error: shutdown failed"
+            "ShutDownError: shutdown failed"
         );
     }
 }
