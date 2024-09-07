@@ -44,9 +44,3 @@ fn main() -> Result<(), EngineError> {
     })
 }
 
-/*if let Some(&rhs) = shard_state.transactions.get(&transaction.tx_id) {
-if transaction == rhs {
-return  Err(EngineError::TransactionError("Duplicate transaction".into()))
-}
-
-}*/
