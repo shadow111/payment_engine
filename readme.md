@@ -11,6 +11,59 @@ This repository implements a Sharded Payments Engine in Rust, designed to handle
 - **Negative Balance**: Clients Can Have a Negative Balance. In this system, clients can have a negative balance under certain conditions, such as when a chargeback occurs on a transaction that has already been disputed.
 - **Locked Accounts**: Locked Accounts Cannot Perform Any Transactions. When an account is locked, the client is unable to perform any transactions, including deposits, withdrawals, disputes, resolves, and chargebacks.
 - **Transaction Order Handling**: The current implementation processes transactions in the order they are received. However, it does not account for the logical order required by some transaction types. For example, a Resolve transaction that is received before a Dispute transaction will be ignored because the transaction is not under dispute yet
+
+## Input Validation
+
+
+The `validate_and_parse_transaction` function  is responsible for taking a raw CSV record and converting it into a well-formed `Transaction` struct. 
+This process involves strict validation to ensure that only valid transactions are processed, while malformed or incomplete records are rejected to maintain the integrity of the transaction data.
+
+#### Features
+
+- **Parse CSV Records**: The function takes a `StringRecord` (a row from a CSV file) as input and attempts to parse it into a `Transaction` struct.
+- **Validate Data**: It ensures that all required fields are present and correctly formatted. If any field is missing or malformed, the function will return an error.
+- **Reject Malformed Records**: If a record cannot be parsed correctly due to insufficient data, incorrect types,..., the function rejects the record by returning an error.
+
+#### Detailed Check
+
+1. **Field Length Check**:
+   - The function expects each record to contain exactly four fields: `transaction type`, `client ID`, `transaction ID`, and `amount`.
+   - If the record does not contain exactly four fields, it is considered malformed, and the function returns an error indicating "Insufficient data in transaction string."
+
+2. **Field Presence and Validation**:
+   - **Transaction Type**:
+      - The first field is parsed into a `TransactionType` enum.
+      - The transaction type is **case-insensitive**, meaning `"Deposit"`, `"DEPOSIT"`, and `"deposit"` are treated the same.
+      - If the type is missing or invalid (i.e., not one of the expected types such as `deposit`, `withdrawal`, `dispute`, etc.), the function returns an error with a message indicating the invalid transaction type.
+   - **Client ID**:
+      - The second field is parsed into a `u16` integer.
+      - If the client ID is missing or cannot be parsed as a `u16`, the function returns an error indicating "Invalid client ID."
+   - **Transaction ID**:
+      - The third field is parsed into a `u32` integer.
+      - If the transaction ID is missing or cannot be parsed as a `u32`, the function returns an error indicating "Invalid transaction ID."
+   - **Amount**:
+      - For `deposit` and `withdrawal` transactions, the fourth field (amount) is parsed into a `Decimal`.
+      - If the amount is missing, zero (can't deposit or withdraw 0), or not a positive number, the function returns an error indicating that the amount must be positive.
+      - For `dispute`, `resolve`, and `chargeback` transactions, the amount field is not required and can be ignored if present.
+
+3. **Error Handling and Skipping Malformed Records**:
+   - When a record fails any of the validation checks mentioned above, the function returns an `EngineError::TransactionError` with a detailed error message.
+
+4. **Correct Transaction Construction**:
+   - If all validations pass, the function constructs a `Transaction` struct with the parsed and validated data.
+   - The transaction is then returned in an `Ok` variant of the `Result` type, ready for further processing by the payment engine.
+
+#### Example Scenarios
+
+- **Valid Record**: A record like `["deposit", "1", "1001", "100.0"]` will be successfully parsed into a `Transaction` struct with a deposit of 100.0000 for client 1.
+
+- **Case-Insensitive Transaction Type**: A record with a transaction type of `["DEPOSIT", "1", "1001", "100.0"]` will be treated the same as `["deposit", "1", "1001", "100.0"]` and successfully parsed.
+
+- **Invalid Transaction Type**: A record with an invalid transaction type, such as `["invalid", "1", "1001", "100.0"]`, will be rejected with an error indicating the invalid type.
+
+- **Missing Amount**: A deposit record missing the amount, such as `["deposit", "1", "1001", ""]`, will be rejected with an error indicating that the amount is missing.
+
+
 ## Technologies Used
 
 - **Rust**: The core programming language used for implementing the engine, chosen for its performance, memory safety, and concurrency support.
