@@ -1,5 +1,6 @@
 use crate::errors::EngineError;
 use crate::models::{ClientAccount, Transaction, TransactionType};
+use async_std::io::stdout;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -197,22 +198,25 @@ impl ShardedEngine {
     }
 
     pub async fn write_accounts(&self) -> Result<(), EngineError> {
-        let mut wtr = csv::Writer::from_writer(std::io::stdout());
-        wtr.write_record(&["client", "available", "held", "total", "locked"])?;
+        let mut wtr = csv_async::AsyncWriter::from_writer(stdout());
 
+        wtr.write_record(&["client", "available", "held", "total", "locked"])
+            .await?;
+        // TODO we can improve for more Concurrent Shard Processing
         for shard in &self.shards {
             let shard_state = shard.lock().await;
             for (client_id, account) in shard_state.accounts.iter() {
-                wtr.serialize((
-                    client_id,
-                    account.available,
-                    account.held,
-                    account.total,
-                    account.locked,
-                ))?;
+                wtr.write_record([
+                    client_id.to_string(),
+                    account.available.to_string(),
+                    account.held.to_string(),
+                    account.total.to_string(),
+                    account.locked.to_string(),
+                ])
+                .await?;
             }
         }
-        wtr.flush()?;
+        wtr.flush().await?;
         Ok(())
     }
 }

@@ -150,24 +150,6 @@ mod tests {
     use rust_decimal_macros::dec;
 
     #[test]
-    fn test_transaction_deserialization() {
-        let csv_data = "type,client,tx,amount\n\
-                        deposit,1,1,1000.0\n";
-        let mut rdr = csv::ReaderBuilder::new().from_reader(csv_data.as_bytes());
-        let transaction: Transaction = rdr
-            .deserialize()
-            .next()
-            .expect("Failed to deserialize transaction")
-            .expect("Invalid CSV data");
-
-        assert_eq!(transaction.tx_type, TransactionType::Deposit);
-        assert_eq!(transaction.client, 1);
-        assert_eq!(transaction.tx_id, 1);
-        assert_eq!(transaction.amount, Some(dec!(1000.0)));
-        assert_eq!(transaction.under_dispute, false);
-    }
-
-    #[test]
     fn test_deposit() {
         let mut account = ClientAccount::new();
         let _ = account.deposit(dec!(1000.0));

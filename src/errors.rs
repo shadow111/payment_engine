@@ -1,12 +1,12 @@
 use crate::models::Transaction;
-use csv::Error as CsvError;
+use csv_async::Error as AsyncCsvError;
 use std::{fmt, io};
 use tokio::sync::mpsc::error::SendError;
 /// Custom error type for the transaction processing engine
 #[derive(Debug)]
 pub enum EngineError {
     IoError(io::Error),
-    CsvError(CsvError),
+    AsyncCsvError(AsyncCsvError),
     TransactionError(String),
     TransactionNotFound(u32),
     InvalidOperation(String),
@@ -18,7 +18,6 @@ impl fmt::Display for EngineError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             EngineError::IoError(err) => write!(f, "IoError: {}", err),
-            EngineError::CsvError(err) => write!(f, "CsvError: {}", err),
             EngineError::TransactionError(err) => write!(f, "TransactionError: {}", err),
             EngineError::TransactionNotFound(tx_id) => {
                 write!(f, "TransactionNotFound: {}", tx_id)
@@ -26,6 +25,7 @@ impl fmt::Display for EngineError {
             EngineError::InvalidOperation(err) => write!(f, "InvalidOperation: {}", err),
             EngineError::SendError(err) => write!(f, "SendError: {}", err),
             EngineError::ShutDownError(err) => write!(f, "ShutDownError: {}", err),
+            EngineError::AsyncCsvError(err) => write!(f, "AsyncCsvError: {}", err),
         }
     }
 }
@@ -35,10 +35,9 @@ impl From<io::Error> for EngineError {
         EngineError::IoError(err)
     }
 }
-
-impl From<CsvError> for EngineError {
-    fn from(err: CsvError) -> Self {
-        EngineError::CsvError(err)
+impl From<AsyncCsvError> for EngineError {
+    fn from(err: AsyncCsvError) -> Self {
+        EngineError::AsyncCsvError(err)
     }
 }
 

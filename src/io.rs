@@ -1,28 +1,27 @@
 use crate::errors::EngineError;
 use crate::models::{Transaction, TransactionType, MAX_DISPLAY_PRECISION};
-use csv::{ReaderBuilder, StringRecord};
+use async_std::fs::File;
+use csv_async::{AsyncReaderBuilder, StringRecord, StringRecordsIntoStream, Trim};
 use rust_decimal::Decimal;
-use std::fs::File;
 
-type TransactionResult = Result<Transaction, EngineError>;
 /// Stream transactions from a CSV file without loading the entire file into memory
-pub fn stream_transactions(
+pub async fn stream_transactions(
     file_path: &str,
-) -> Result<impl Iterator<Item = TransactionResult>, EngineError> {
-    let file = File::open(file_path).map_err(|err| EngineError::IoError(err))?;
+) -> Result<StringRecordsIntoStream<File>, EngineError> {
+    let file = File::open(file_path)
+        .await
+        .map_err(|err| EngineError::IoError(err))?;
 
-    let rdr = ReaderBuilder::new().trim(csv::Trim::All).from_reader(file);
+    let reader = AsyncReaderBuilder::new()
+        .has_headers(true)
+        .trim(Trim::All)
+        .create_reader(file)
+        .into_records();
 
-    Ok(rdr.into_records().map(|result| match result {
-        Ok(record) => {
-            let transaction = validate_and_parse_transaction(record)?;
-            Ok(transaction)
-        }
-        Err(e) => Err(EngineError::CsvError(e)),
-    }))
+    Ok(reader)
 }
 
-fn validate_and_parse_transaction(record: StringRecord) -> Result<Transaction, EngineError> {
+pub fn validate_and_parse_transaction(record: StringRecord) -> Result<Transaction, EngineError> {
     if record.len() != 4 {
         return Err(EngineError::TransactionError(
             "Insufficient data in transaction string".into(),
@@ -90,7 +89,8 @@ fn validate_and_parse_transaction(record: StringRecord) -> Result<Transaction, E
 #[cfg(test)]
 mod tests {
     use super::*;
-    use csv::StringRecord;
+    use csv_async::StringRecord;
+    use futures::StreamExt;
     use rust_decimal::Decimal;
     use std::fs;
     use std::fs::File;
@@ -98,69 +98,32 @@ mod tests {
     use std::str::FromStr;
 
     fn create_temp_csv(file_path: &str, data: &str) -> String {
-        let mut file = File::create(file_path).expect("Unable to create test file");
+        let mut file =
+            File::create(format!("res/{}", file_path)).expect("Unable to create test file");
         file.write_all(data.as_bytes())
             .expect("Unable to write to test file");
-        file_path.to_string()
+        format!("res/{}", file_path).to_string()
     }
 
-    #[test]
-    fn test_stream_transactions_valid_csv() {
+    #[tokio::test]
+    async fn test_stream_transactions_valid_csv() {
         let csv_data = "type,client,tx,amount\n\
                         deposit,1,1,1000.0\n\
                         withdrawal,1,2,500.0\n";
 
         let file_path = create_temp_csv("test_stream_transactions_valid.csv", csv_data);
-        let transactions = stream_transactions(&file_path).expect("Failed to stream transactions");
+        let mut transactions = stream_transactions(&file_path)
+            .await
+            .expect("Failed to stream transactions");
 
         let mut count = 0;
-        for transaction in transactions {
+        while let Some(transaction) = transactions.next().await {
             count += 1;
             assert!(transaction.is_ok());
         }
         assert_eq!(count, 2);
 
-        fs::remove_file(file_path).expect("Failed to delete test file");
-    }
-
-    #[test]
-    fn test_stream_transactions_invalid_csv() {
-        let csv_data = "type,client,tx,amount\n\
-                        deposit,1,1,1000.0\n\
-                        withdrawal,1,,500.0\n"; // Missing tx field
-
-        let file_path = create_temp_csv("test_stream_transactions_invalid.csv", csv_data);
-        let transactions = stream_transactions(&file_path).expect("Failed to stream transactions");
-
-        let mut count = 0;
-        for transaction in transactions {
-            count += 1;
-            if count == 2 {
-                assert!(transaction.is_err());
-            }
-        }
-        assert_eq!(count, 2);
-
-        fs::remove_file(file_path).expect("Failed to delete test file");
-    }
-
-    #[test]
-    fn test_stream_transactions_corrupted_data() {
-        let csv_data = "type,client,tx,amount\n\
-                        deposit,1,1,abc\n"; // 'abc' is not a valid amount
-
-        let file_path = create_temp_csv("test_stream_transactions_corrupted_data.csv", csv_data);
-        let transactions = stream_transactions(&file_path).expect("Failed to stream transactions");
-
-        let mut count = 0;
-        for transaction in transactions {
-            count += 1;
-            if count == 1 {
-                assert!(transaction.is_err());
-            }
-        }
-        assert_eq!(count, 1);
-        fs::remove_file(file_path).expect("Failed to delete test file");
+        fs::remove_file(&file_path).expect("Failed to delete test file");
     }
 
     #[test]

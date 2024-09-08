@@ -2,3 +2,6 @@
 .idea/
 .DS_Store
 /tmp
+/res/out.csv
+/res/test_transactions.csv
+/res/test_transactions_account.csv

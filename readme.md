@@ -39,7 +39,7 @@ The engine is designed with a sharded architecture, where client accounts and th
     - The engine uses **channels** provided by the `tokio::sync::mpsc` module to send transactions to the appropriate shard asynchronously. Each shard has its own transaction channel, allowing it to process transactions concurrently.
    
 4. **Duplicate Transaction Detection**: 
-   - The engine includes a mechanism to detect and handle duplicate transactions. If a transaction with the same ID is encountered more than once, the engine will skip the duplicate and only process the transaction the first time it is received. This ensures the integrity of transaction processing by preventing double processing.
+   - The engine includes a mechanism to detect and handle duplicate transactions. If a transaction  is encountered more than once, the engine will skip the duplicate and only process the transaction the first time it is received. This ensures the integrity of transaction processing by preventing double processing.
 
 5. **Transaction Processing**:
     - Each shard processes transactions asynchronously. The engine handles deposits, withdrawals, disputes, resolves, and chargebacks, updating the client account states accordingly.
